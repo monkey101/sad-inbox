@@ -7,25 +7,31 @@ $(function(){
         }
     });
     
-    var Option = Backbone.Model.extend({
-        defaults: {
-            'name': 'An option',
-            'value': 'A value'
+    // Pretty much every model view has been EXACTLY the same except for the 
+    // template and tage names used.  Just a little wrapper so you only have 
+    // to define those.
+    Backbone.ModelView = Backbone.View.extend({
+        initialize: function(opts){
+            _.bindAll(this, 'render');
+            this.model.bind('change', this.render);
+            this.model.view = this;
         },
-        initialize: function(spec){
-            this.validators = spec.validators || {};
+        render: function() {
+            $(this.el).html(this.template(this.model.toJSON()));
+            return this;
         },
-        validate: function(attrs){
-            for(name in attrs){
-                if(this.validators[name]){
-                    this.validators[name].apply(this, attrs[name]);
-                }
-            }
+        remove: function() {
+            $(this.el).remove();
         }
     });
-
-    var OptionList = Backbone.Collection.extend({
-        model: Option,
+    
+    
+    var Options = Backbone.Model.extend({
+        defaults: {
+            'customDomain': '',
+            'newMessageSound': 'http://media.freesound.org/data/19/previews/19446__totya__yeah_preview.mp3',
+            'noMessagesSound': 'http://media.freesound.org/data/73/previews/73581__Benboncan__Sad_Trombone_preview.mp3'
+        },
         localStorage: new Store('sad-options')
     });
 
@@ -39,27 +45,9 @@ $(function(){
     });
 
     // Handles setting up the options list.
-    var getOptionsList = function(){
-        var defaultOptions = {
-            'customDomain': '',
-            'newMessageSound': 'http://media.freesound.org/data/19/previews/19446__totya__yeah_preview.mp3',
-            'noMessagesSound': 'http://media.freesound.org/data/73/previews/73581__Benboncan__Sad_Trombone_preview.mp3'
-        };
-
-        var options = new OptionList;
+    var getOptions = function(){
+        var options = new Options;
         options.fetch();
-        console.log('Options');
-        
-        if(options.length < 1){
-            // Create default option models.
-            for(name in defaultOptions){
-                var opt = new Option({'name': name, 'value': defaultOptions[name]})
-                options.add(opt);
-                opt.save();
-            }
-
-        }
-        console.log(options);
         return options;
     }
 
@@ -67,7 +55,7 @@ $(function(){
     var SadInbox = Backbone.Controller.extend({
         initialize: function(){
             _.bindAll(this, '_onTabSelectionChanged', '_giveFeedback');
-            this._options = getOptionsList();
+            this._options = getOptions();
             
             this._inbox = new Inbox;
             this._inbox.fetch();
@@ -111,7 +99,7 @@ $(function(){
         },
         _giveFeedback: function(goodOrBad){
             console.log('Giving feedback.' + goodOrBad);
-            this._playSound(this._options.contains('name', goodOrBad).get('value'));
+            this._playSound(this._options.get(goodOrBad));
         },
         _playSound: function(url){
             console.log('Playsound '+url);
@@ -119,11 +107,30 @@ $(function(){
         }
     });
     window.SadInbox = SadInbox;
-
-    var SadInboxOptions = Backbone.Controller.extend({
-        initialize: function(){
-            this._options = getOptionsList();
+    
+    var OptionsView = Backbone.ModelView.extend({
+        el: $('#sad-inbox-options'),
+        events: {
+          "submit #options-form":  "saveOptions",
+        },
+        saveOptions: function(){
+            this.model.save();
+            return false;
+        },
+        render: function(){
+            this.template = _.template($('#options-template').html());
+            $(this.el).html(this.template(this.model.toJSON()));
+            return this;
         }
     });
+    
+    var SadInboxOptions = Backbone.Controller.extend({
+        initialize: function(){
+            this._options = getOptions();
+            this._view = new OptionsView({model: this._options});
+            this._view.render();
+        }
+    });
+    window.SadInboxOptions = SadInboxOptions;
 });
 
